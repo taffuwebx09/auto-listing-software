@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowDownToLine, ArrowUpRight, Check, CircleAlert, Clock3, Image as ImageIcon, Link2, LoaderCircle, PackageSearch, RefreshCw, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
@@ -11,6 +11,23 @@ export default function App() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [selectedImage, setSelectedImage] = useState(0);
+  const [saveStatus, setSaveStatus] = useState('');
+  const [showReview, setShowReview] = useState(false);
+  const [reviewConfirmed, setReviewConfirmed] = useState(false);
+  const draftKey = product?.sourceUrl ? `auto-listing-draft:${product.sourceUrl}` : '';
+
+  // Session-only drafts: survive refresh in this tab, without a database.
+  useEffect(() => {
+    if (!product || !draftKey) return;
+    try {
+      const drafts = JSON.parse(sessionStorage.getItem('auto-listing-drafts') || '{}');
+      drafts[draftKey] = product;
+      sessionStorage.setItem('auto-listing-drafts', JSON.stringify(drafts));
+      setSaveStatus('Saved in this session');
+    } catch {
+      setSaveStatus('Session storage unavailable');
+    }
+  }, [product, draftKey]);
   const imageCount = product?.images?.length || 0;
   const priceLabel = useMemo(() => {
     if (product?.price === null || product?.price === undefined || product.price === '') return 'Not found';
@@ -20,7 +37,7 @@ export default function App() {
 
   async function fetchProduct(event) {
     event?.preventDefault();
-    setError(''); setNotice(''); setProduct(null); setSelectedImage(0);
+    setError(''); setNotice(''); setShowReview(false); setReviewConfirmed(false);
     if (!url.trim()) { setError('Product URL paste karo, phir Fetch Product click karo.'); return; }
     setLoading(true);
     try {
@@ -29,14 +46,20 @@ export default function App() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Product fetch nahi ho paya.');
-      setProduct({ ...data.product, title: data.product.title || '', price: data.product.price ?? '', description: data.product.description || '', images: data.product.images || [] });
-      setNotice('Product details fetched. Review and edit the preview below.');
+      const fetchedProduct = { ...data.product, title: data.product.title || '', price: data.product.price ?? '', description: data.product.description || '', images: data.product.images || [] };
+      const key = `auto-listing-draft:${fetchedProduct.sourceUrl || url.trim()}`;
+      let savedDraft = null;
+      try { savedDraft = JSON.parse(sessionStorage.getItem('auto-listing-drafts') || '{}')[key] || null; } catch { /* continue with fetched data */ }
+      setProduct(savedDraft ? { ...fetchedProduct, ...savedDraft, images: savedDraft.images || fetchedProduct.images } : fetchedProduct);
+      setSelectedImage(0);
+      setNotice(savedDraft ? 'Product fetched. Your session draft has been restored.' : 'Product details fetched. Review and edit the preview below.');
     } catch (err) { setError(err.message || 'Network error. Please try again.'); }
     finally { setLoading(false); }
   }
 
-  function updateProduct(field, value) { setProduct((current) => ({ ...current, [field]: value })); }
+  function updateProduct(field, value) { setReviewConfirmed(false); setProduct((current) => ({ ...current, [field]: value })); }
   function removeImage(image) {
+    setReviewConfirmed(false);
     setProduct((current) => ({ ...current, images: current.images.filter((item) => item !== image) }));
     setSelectedImage(0);
   }
@@ -44,7 +67,7 @@ export default function App() {
   return <div className="app-shell">
     <header className="topbar">
       <a className="brand" href="#top" aria-label="Auto Listing home"><span className="brand-mark"><PackageSearch size={21} /></span><span><b>Auto Listing</b><small>PRODUCT IMPORT WORKSPACE</small></span></a>
-      <div className="top-right"><span className="phase-pill"><span className="status-dot" /> PHASE 01 · PRODUCT FETCHING</span><span className="avatar">T</span></div>
+      <div className="top-right"><span className="phase-pill"><span className="status-dot" /> PRODUCT WORKSPACE · PHASE 1–3</span><span className="avatar">T</span></div>
     </header>
     <main id="top" className="main-wrap">
       <section className="welcome-row">
@@ -76,11 +99,23 @@ export default function App() {
             <div className="field-row"><label className="field-label">PRICE ({product.currency || 'INR'})<input type="number" min="0" step="0.01" value={product.price} onChange={(e) => updateProduct('price', e.target.value)} placeholder="Enter price" /></label><div className="price-preview"><small>FORMATTED PRICE</small><b>{priceLabel}</b></div></div>
             <label className="field-label">DESCRIPTION<textarea rows="7" value={product.description} onChange={(e) => updateProduct('description', e.target.value)} placeholder="No description found. You can enter it manually." /></label>
             <div className="source-box"><span className="source-icon"><ArrowDownToLine size={16} /></span><div><b>Source website</b><a href={product.sourceUrl} target="_blank" rel="noreferrer">{product.source} <ArrowUpRight size={12} /></a></div></div>
-            <div className="review-actions"><button className="secondary-btn" onClick={() => { setProduct(null); setNotice(''); setError(''); }} type="button"><RefreshCw size={15} /> Clear preview</button><span><Check size={14} /> Changes stay in this preview only</span></div>
+            <div className="review-actions"><button className="secondary-btn" onClick={() => { setProduct(null); setNotice(''); setError(''); }} type="button"><RefreshCw size={15} /> Clear preview</button><span><Check size={14} /> {saveStatus || 'Session draft'}</span></div>
           </section>
         </div>
+        <section className="review-panel">
+          <div className="review-panel-copy"><div className="eyebrow">FINAL CHECK</div><h3>Review before publishing</h3><p>Confirm that the prepared title, price, description and selected images are exactly as you want them.</p><div className="validation-list">
+            {[
+              ['Product title', Boolean(product.title?.trim())],
+              ['Price', product.price !== '' && product.price !== null && Number.isFinite(Number(product.price)) && Number(product.price) >= 0],
+              ['Description', Boolean(product.description?.trim())],
+              ['At least one product image', Array.isArray(product.images) && product.images.length > 0]
+            ].map(([label, valid]) => <div className={valid ? 'validation-ok' : 'validation-missing'} key={label}>{valid ? <Check size={14} /> : <CircleAlert size={14} />}{label}: {valid ? 'Ready' : 'Missing / check required'}</div>)}
+          </div></div>
+          <div className="review-panel-actions"><span className={reviewConfirmed ? 'confirmed-state' : 'pending-state'}>{reviewConfirmed ? 'Details confirmed' : 'Not confirmed yet'}</span><button className="primary-btn" type="button" onClick={() => setShowReview(true)}>Review final details <ShieldCheck size={16} /></button></div>
+        </section>
+        {showReview && <div className="modal-backdrop" role="presentation"><section className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title"><div className="modal-icon"><ShieldCheck size={22} /></div><h3 id="confirm-title">Confirm product details</h3><p>Check the prepared product before publishing. This step only confirms your preview; publishing integration is a separate phase.</p><div className="confirm-summary"><span>Title <b>{product.title || 'Missing'}</b></span><span>Price <b>{priceLabel}</b></span><span>Description <b>{product.description?.trim() ? `${product.description.trim().length} characters` : 'Missing'}</b></span><span>Images <b>{imageCount}</b></span></div><div className="modal-actions"><button className="secondary-btn" type="button" onClick={() => setShowReview(false)}>Back to edit</button><button className="primary-btn" type="button" onClick={() => { setReviewConfirmed(true); setShowReview(false); }}>Confirm details</button></div></section></div>}
       </>}
-      <section className="phase-note"><div className="sparkle"><Sparkles size={17} /></div><div><b>Phase 1 · Product fetching</b><p>AI description generation, HodaHub publishing and permanent image upload are intentionally not enabled yet. First, verify this supplier fetch workflow.</p></div></section>
+      <section className="phase-note"><div className="sparkle"><Sparkles size={17} /></div><div><b>Phase 1–3 · Fetch, edit & review</b><p>Supplier fetching remains unchanged. Manual descriptions are saved in this browser tab session, and final product details can be reviewed and confirmed. Publishing integration is not enabled in this milestone.</p></div></section>
     </main>
     <footer><span>Auto Listing Software</span><span>Built for HodaHub · Phase 1</span></footer>
   </div>;
