@@ -1,9 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Auto Listing - HodaHub Bridge",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Connects Auto Listing to the HodaHub admin session in your browser.",
-  "permissions": ["tabs", "scripting"],
+  "permissions": [
+    "tabs",
+    "scripting"
+  ],
   "host_permissions": [
     "https://www.hodahub.in/*",
     "https://hodahub.in/*",
@@ -11,17 +14,30 @@
     "https://cdn.cartpe.shop/*",
     "https://api.cloudinary.com/*"
   ],
-  "background": { "service_worker": "background.js" },
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
-      "matches": ["https://auto-listing-software-4sdi.vercel.app/*"],
-      "js": ["auto-listing-bridge.js"],
-      "run_at": "document_start"
+      "matches": [
+        "https://auto-listing-software-4sdi.vercel.app/*"
+      ],
+      "js": [
+        "auto-listing-bridge.js"
+      ],
+      "run_at": "document_start",
+      "world": "ISOLATED"
     },
     {
-      "matches": ["https://www.hodahub.in/*", "https://hodahub.in/*"],
-      "js": ["hodahub-content.js"],
-      "run_at": "document_idle"
+      "matches": [
+        "https://www.hodahub.in/*",
+        "https://hodahub.in/*"
+      ],
+      "js": [
+        "hodahub-content.js"
+      ],
+      "run_at": "document_idle",
+      "world": "ISOLATED"
     }
   ]
 }
