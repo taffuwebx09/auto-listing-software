@@ -100,15 +100,16 @@ export default function App() {
         uploaded.push(cloudData.secure_url);
       }
       const brand = hubMeta.brands.find(x => x.id === listing.brandId);
+      const slug = title.toLowerCase().normalize('NFKD').replace(/[\\u0300-\\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
       const payload = {
-        name: title, brand: brand?.name || brand?.title || '', brandId: listing.brandId, categoryId: listing.categoryId,
+        name: title, slug, brand: brand?.name || brand?.title || '', brandId: listing.brandId, categoryId: listing.categoryId,
         description, price: price.toFixed(2), discountPrice: discountPrice.toFixed(2), images: uploaded,
         isActive: listing.isActive, showOnHome: listing.showOnHome, codAvailable: listing.codAvailable,
         isBestSeller: listing.isBestSeller, productLink: product.sourceUrl, stock,
         specifications: [], addonIds: listing.addonIds, addonLinks: []
       };
       const created = await hubBridgeRequest({ action: 'publish', payload });
-      const saved = created.product || created.data || created;
+      const saved = created?.product || created?.data?.product || created?.data || created;
       setPublishResult({ id: saved.id, name: saved.name || title, slug: saved.slug || '' });
       setNotice('Product successfully published to HodaHub.');
     } catch (e) { setHubError(e.message || 'Publish failed.'); }
