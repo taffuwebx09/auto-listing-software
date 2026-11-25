@@ -30,6 +30,41 @@ export default function App() {
     window.addEventListener(eventName, handler, { once: true });
     window.dispatchEvent(new CustomEvent('AUTO_LISTING_HUB_REQUEST', { detail: { id, request } }));
   });
+  // Auto-connect once when the app opens; reconnect quietly when returning to this tab.
+  useEffect(() => {
+    let cancelled = false;
+    const attempt = async () => {
+      if (cancelled || hubConnected || hubLoading) return;
+      try {
+        const catalog = await hubBridgeRequest({ action: 'catalog' });
+        if (cancelled) return;
+        setHubMeta({
+          categories: Array.isArray(catalog?.categories) ? catalog.categories : [],
+          brands: Array.isArray(catalog?.brands) ? catalog.brands : [],
+          addons: Array.isArray(catalog?.addons) ? catalog.addons : []
+        });
+        setHubConnected(true);
+        setHubError('');
+        setListing(v => ({
+          ...v,
+          categoryId: v.categoryId || catalog?.categories?.[0]?.id || '',
+          brandId: v.brandId || catalog?.brands?.[0]?.id || ''
+        }));
+      } catch {
+        // Extension/HodaHub may not be ready at initial page load. Manual connect remains available.
+      }
+    };
+    attempt();
+    const onFocus = () => { if (!document.hidden) attempt(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, []);
+
   async function connectHub() {
     setHubLoading(true); setHubError(''); setHubConnected(false);
     try {
