@@ -4,7 +4,9 @@ Separate product-import workspace for HodaHub. Phase 1 is product fetching and r
 
 ## Phase 1
 - Product URL input for the initial supplier: `eye-care.cartpe.shop`
-- Extract title, available price, description, and discoverable product images from HTML metadata, JSON-LD, and gallery markup.
+- Fetch product data from the supplier's encrypted `/api/product-details` endpoint.
+- Decrypt the supplier response server-side and map product title, basic price, description, and gallery images.
+- Resolve gallery filenames through the verified Cartpe gallery CDN path.
 - Editable title, price, and description preview; remove unwanted images.
 - Clear validation and extraction errors.
 - Product preview stays in browser memory only.
@@ -17,14 +19,14 @@ npm run dev
 ```
 Frontend: http://localhost:5173 · API: http://localhost:4000
 
-Copy `server/.env.example` to `server/.env` when changing configuration.
+Copy `server/.env.example` to `server/.env`, then set `EYECARE_CARTPE_FRONTEND_KEY` to the supplier frontend key used by its public product API bundle. Keep this setting on the server only; never add it to a `VITE_*` variable or commit a real value.
 
 ## Deployment
 - Vercel: set root directory to `client`; set `VITE_API_BASE_URL` to the deployed API URL.
-- Render (or another Node host): root directory `server`, build command `npm install`, start command `npm start`; set `CLIENT_ORIGIN` to the frontend origin.
+- Render (or another Node host): root directory `server`, build command `npm install`, start command `npm start`; set `CLIENT_ORIGIN` to the frontend origin and configure `EYECARE_CARTPE_FRONTEND_KEY` as a server environment variable.
 
 ## Limitations
-Only Eye-Care Cartpe is supported in this phase. Extraction is based on server-rendered HTML, metadata, JSON-LD, and image markup. If the supplier renders data only in browser-side JavaScript, some fields/images may not be discoverable. Some CDNs may block image previews. Test the actual supplier URL after deploying the API before calling Phase 1 production-ready.
+Only Eye-Care Cartpe is supported in this phase. The adapter depends on the supplier's current encrypted API contract and CDN image path; supplier-side changes may require an adapter update. Test the actual supplier URL after deploying the API before calling Phase 1 production-ready.
 
 ## Security
-The API only fetches the configured supplier host, rejects credentials and unexpected ports, does not follow redirects, applies a timeout and a 4 MB response cap, and does not accept arbitrary fetch URLs. Add future suppliers through explicit adapters.
+The API only accepts product URLs from the configured supplier host, rejects credentials and unexpected ports, uses a request timeout, and does not accept arbitrary fetch URLs. Supplier encryption and decryption happen server-side. Add future suppliers through explicit adapters.
